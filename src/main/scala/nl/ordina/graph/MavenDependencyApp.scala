@@ -15,7 +15,7 @@ object MavenDependencyApp {
     val data = readDataFromFile(args(0), sqlContext)
     val graph = constructGraphFromData(data)
     val ranks = getPageRanks(graph)
-    displayPageRanks(ranks, graph.vertices)
+    savePageRanks(ranks, graph.vertices, args(1))
     saveGraphToDisk(graph, args(1))
   }
 
@@ -53,7 +53,7 @@ object MavenDependencyApp {
     graph.pageRank(0.0001).vertices //FIXME magic number
   }
 
-  private def displayPageRanks(ranks: VertexRDD[Double], vertices: VertexRDD[MavenEntry]): Unit = {
+  private def savePageRanks(ranks: VertexRDD[Double], vertices: VertexRDD[MavenEntry],outputFolder: String): Unit = {
     val ranksByMavenEntry = vertices.join(ranks).map {
       case (id, (mavenEntry, rank)) => (mavenEntry, rank)
     }
@@ -62,9 +62,11 @@ object MavenDependencyApp {
       override def compare(a: (MavenEntry, Double), b: (MavenEntry, Double)) = (b._2 - a._2).toInt
     }
 
-    ranksByMavenEntry.takeOrdered(25)(topRankOrdering).zipWithIndex.foreach {
-      case ((entry, rank), index) => println("" + index + ": " + entry + " with rank " + rank)
+    val ranksOutput = ranksByMavenEntry.takeOrdered(25)(topRankOrdering).zipWithIndex.map{
+      case ((entry, rank), index) => "" + index + ": " + entry + " with rank " + rank
     }
+
+    File(outputFolder+"/ranks").writeAll(ranksOutput mkString "\n")
   }
 
   private def saveGraphToDisk(graph: Graph[MavenEntry, String], outputFolder: String) = {
