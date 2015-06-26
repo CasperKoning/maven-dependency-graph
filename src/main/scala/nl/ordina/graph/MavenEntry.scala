@@ -2,6 +2,8 @@ package nl.ordina.graph
 
 import java.util.Base64
 
+import org.apache.spark.sql.Row
+
 import scala.util.parsing.json.JSON
 
 case class MavenEntry(groupId: String, artifactId: String, version: String) {
@@ -46,9 +48,24 @@ object MavenEntry{
   def readBase64EncodedJSONtoListOfMavenEntries(base64EncodedJSON: String): List[MavenEntry] = {
     val json = new String(Base64.getDecoder.decode(base64EncodedJSON))
     JSON.parseFull(json) match {
-      case Some(x: List[Map[String, String]]) =>
-        x.map(entry => MavenEntry(entry.get("groupid").get, entry.get("artifactid").get, entry.get("version").get))
+      case Some(x: List[Map[String, String]]) => x.map(getMavenEntry)
       case _ => List()
     }
+  }
+
+  private[this] def getMavenEntry(mavenMap: Map[String,String]): MavenEntry = {
+      MavenEntry(
+        mavenMap.getOrElse("groupid", "NO_GROUP_ID"),
+        mavenMap.getOrElse("artifactid", "NO_ARTIFACT_ID"),
+        mavenMap.getOrElse("version", "NO_VERSION")
+      )
+  }
+
+  def getDependenciesFromRow(row: Row): List[MavenEntry] = {
+    MavenEntry.readBase64EncodedJSONtoListOfMavenEntries(row.getString(3))
+  }
+
+  def getFirstMavenEntryFromRow(row: Row): MavenEntry = {
+    MavenEntry(row.getString(0), row.getString(1), row.getString(2))
   }
 }

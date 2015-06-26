@@ -5,6 +5,8 @@ import org.apache.spark.graphx._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.reflect.io.File
+
 object MavenDependencyApp {
 
   def main(args: Array[String]) {
@@ -13,11 +15,11 @@ object MavenDependencyApp {
     val data = readDataFromFile(args(0), sqlContext)
     val graph = constructGraphFromData(data)
     val ranks = getPageRanks(graph)
-    displayPageRanks(ranks,graph.vertices)
-    saveGraphToDisk(graph,args(1))
+    displayPageRanks(ranks, graph.vertices)
+    saveGraphToDisk(graph, args(1))
   }
 
-  def checkForValidInput(args: Array[String]): Unit = {
+  private def checkForValidInput(args: Array[String]): Unit = {
     if (args.length != 2) {
       throw new IllegalStateException(
         """
@@ -28,58 +30,55 @@ object MavenDependencyApp {
     }
   }
 
-  private[this] def initializeContext: SQLContext = {
+  private def initializeContext: SQLContext = {
     val conf = new SparkConf().setAppName("Maven Dependency Graph")
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
     sqlContext
   }
 
-  private[this] def readDataFromFile(fileLocation: String, sqlContext: SQLContext): DataFrame = {
+  private def readDataFromFile(fileLocation: String, sqlContext: SQLContext): DataFrame = {
     sqlContext.tsvFile(fileLocation, useHeader = false)
   }
 
-  private[this] def constructGraphFromData(data: DataFrame): Graph[MavenEntry, String] = {
+  private def constructGraphFromData(data: DataFrame): Graph[MavenEntry, String] = {
     val tuples = data.map(rowToTupleOfMavenEntryAndListOfDependencies)
     tuples.cache()
-    val vertices = tuples.map(tuple => (tuple._1.getUniqueId, tuple._1))
+    val vertices = tuples.flatMap(tuple => (tuple._1.getUniqueId, tuple._1)::tuple._2.map(entry => (entry.getUniqueId, entry)))
     val edges = tuples.flatMap(establishRelationships)
     Graph(vertices, edges)
   }
 
-  private[this] def getPageRanks(graph: Graph[MavenEntry, String]): VertexRDD[Double] = {
+  private def getPageRanks(graph: Graph[MavenEntry, String]): VertexRDD[Double] = {
     graph.pageRank(0.0001).vertices //FIXME magic number
   }
 
-  private[this] def displayPageRanks(ranks: VertexRDD[Double],vertices: VertexRDD[MavenEntry]): Unit = {
-    implicit val topRankOrdering = new Ordering[(MavenEntry, Double)] {
-      override def compare(a: (MavenEntry, Double), b: (MavenEntry, Double)) = (b._2 - a._2).toInt
-    }
-
+  private def displayPageRanks(ranks: VertexRDD[Double], vertices: VertexRDD[MavenEntry]): Unit = {
     val ranksByMavenEntry = vertices.join(ranks).map {
       case (id, (mavenEntry, rank)) => (mavenEntry, rank)
     }
-    ranksByMavenEntry.takeOrdered(25).zipWithIndex.foreach {
+
+    val topRankOrdering = new Ordering[(MavenEntry, Double)] {
+      override def compare(a: (MavenEntry, Double), b: (MavenEntry, Double)) = (b._2 - a._2).toInt
+    }
+
+    ranksByMavenEntry.takeOrdered(25)(topRankOrdering).zipWithIndex.foreach {
       case ((entry, rank), index) => println("" + index + ": " + entry + " with rank " + rank)
     }
   }
 
-  private[this] def saveGraphToDisk(graph: Graph[MavenEntry, String], outputFolder: String) ={
-    graph.vertices.saveAsTextFile(outputFolder)
-    graph.edges.saveAsTextFile(outputFolder)
+  private def saveGraphToDisk(graph: Graph[MavenEntry, String], outputFolder: String) = {
+    File(outputFolder+"/vertices").writeAll(graph.vertices.collect() mkString "\n")
+    File(outputFolder+"/edges").writeAll(graph.edges.collect() mkString "\n")
   }
 
-  private[this] def establishRelationships(tuple: (MavenEntry, List[MavenEntry])): List[Edge[String]] = {
+  private def establishRelationships(tuple: (MavenEntry, List[MavenEntry])): List[Edge[String]] = {
     val dependencyRelationship = "depends on"
     val entry = tuple._1
-    tuple._2.map {
-      dependency => Edge(entry.getUniqueId, dependency.getUniqueId, dependencyRelationship)
-    }
+    tuple._2.map(dependency => Edge(entry.getUniqueId, dependency.getUniqueId, dependencyRelationship))
   }
 
-  private[this] def rowToTupleOfMavenEntryAndListOfDependencies(row: Row): (MavenEntry, List[MavenEntry]) = {
-    val entry = MavenEntry(row.getString(0), row.getString(1), row.getString(2))
-    val dependencies = MavenEntry.readBase64EncodedJSONtoListOfMavenEntries(row.getString(3))
-    (entry, dependencies)
+  private def rowToTupleOfMavenEntryAndListOfDependencies(row: Row): (MavenEntry, List[MavenEntry]) = {
+    (MavenEntry.getFirstMavenEntryFromRow(row), MavenEntry.getDependenciesFromRow(row))
   }
 }

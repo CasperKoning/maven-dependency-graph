@@ -69,4 +69,5 @@ crashlytics-build.properties
 
 ### Too large data
 src/main/resources/allEntries.csv
+src/test/resources/allEntries.csv
 
