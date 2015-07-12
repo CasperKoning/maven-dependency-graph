@@ -70,8 +70,8 @@ object MavenDependencyApp {
   }
 
   private def saveGraphToDisk(graph: Graph[MavenEntry, String], outputFolder: String) = {
-    File(outputFolder+"/vertices").writeAll(graph.vertices.collect() mkString "\n")
-    File(outputFolder+"/edges").writeAll(graph.edges.collect() mkString "\n")
+    File(outputFolder+"/vertices").writeAll(graph.vertices.coalesce(1).collect() mkString "\n")
+    File(outputFolder+"/edges").writeAll(graph.edges.coalesce(1).collect() mkString "\n")
   }
 
   private def establishRelationships(tuple: (MavenEntry, List[MavenEntry])): List[Edge[String]] = {

@@ -2,26 +2,27 @@ package nl.ordina.graph
 
 import java.util.Base64
 
+import com.google.common.hash.{Hasher, Hashing}
 import org.apache.spark.sql.Row
 
 import scala.util.parsing.json.JSON
 
 case class MavenEntry(groupId: String, artifactId: String, version: String) {
   /**
-   * I return a unique Id in the shape of a Long.
-   *
-   * Currently, the hashcode function is used to obtain the unique Id. Since the hashcode function returns an Int in
-   * stead of a Long, there is room for improvement.
-   *
-   * Although some initial tests did not show any improvement using this algorithm, a potentially better candidate is
-   * found in: http://stackoverflow.com/questions/1660501/what-is-a-good-64bit-hash-function-in-java-for-textual-strings
+   * I return a unique Id, defined by my state, in the shape of a Long.
    */
   def getUniqueId: Long = {
-    hashCode()
+    val hasher = Hashing.goodFastHash(64).newHasher()
+
+    if (groupId != null && !groupId.isEmpty) hasher.putString(groupId)
+    if (artifactId != null && !artifactId.isEmpty) hasher.putString(artifactId)
+    if (version != null && !version.isEmpty) hasher.putString(version)
+
+    hasher.hash().asLong()
   }
 }
 
-object MavenEntry{
+object MavenEntry {
   /**
    * Utility method for reading a Base64 encoded String that contains a JSON-array of MavenEntries.
    * For example, the Base64 String:
@@ -48,17 +49,17 @@ object MavenEntry{
   def readBase64EncodedJSONtoListOfMavenEntries(base64EncodedJSON: String): List[MavenEntry] = {
     val json = new String(Base64.getDecoder.decode(base64EncodedJSON))
     JSON.parseFull(json) match {
-      case Some(x: List[Map[String, String]]) => x.map(getMavenEntry)
+      case Some(x: List[Map[String, String]]) => x map getMavenEntry
       case _ => List()
     }
   }
 
-  private[this] def getMavenEntry(mavenMap: Map[String,String]): MavenEntry = {
-      MavenEntry(
-        mavenMap.getOrElse("groupid", "NO_GROUP_ID"),
-        mavenMap.getOrElse("artifactid", "NO_ARTIFACT_ID"),
-        mavenMap.getOrElse("version", "NO_VERSION")
-      )
+  private[this] def getMavenEntry(mavenMap: Map[String, String]): MavenEntry = {
+    MavenEntry(
+      mavenMap.getOrElse("groupid", "NO_GROUP_ID"),
+      mavenMap.getOrElse("artifactid", "NO_ARTIFACT_ID"),
+      mavenMap.getOrElse("version", "NO_VERSION")
+    )
   }
 
   def getDependenciesFromRow(row: Row): List[MavenEntry] = {

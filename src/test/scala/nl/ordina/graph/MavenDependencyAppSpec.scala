@@ -12,8 +12,10 @@ class MavenDependencyAppSpec extends FlatSpec with Matchers {
   private val dependencies = data.flatMap(MavenEntry.getDependenciesFromRow)
 
   "The number of distinct IDs" should "be equal to the number of distinct MavenEntries" in {
-    val ids = mavenEntries.map(entry => entry.getUniqueId)
-    ids.distinct().count() should be(mavenEntries.distinct().count())
+    val idsEntries = mavenEntries.map(entry => entry.getUniqueId)
+    val idsDependencies = dependencies.map(entry => entry.getUniqueId)
+    val ids = idsEntries.union(idsDependencies)
+    ids.distinct().count() should be(mavenEntries.union(dependencies).distinct().count())
   }
 
   "All of the read entries" should "not be null" in {
