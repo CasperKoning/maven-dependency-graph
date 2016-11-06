@@ -12,6 +12,8 @@ val graphx = "org.apache.spark" % "spark-graphx_2.10" % "1.4.0" % "provided"
 
 val sparkCsv = "com.databricks" % "spark-csv_2.10" % "1.1.0"
 
+val spray = "io.spray" %%  "spray-json"  % "1.3.2"
+
 val guava = "com.google.guava" % "guava" % "11.0"
 
 val scalaTest =  "org.scalatest" % "scalatest_2.10" % "2.2.5"
@@ -21,6 +23,7 @@ libraryDependencies ++= Seq(
   sparkSql,
   graphx,
   sparkCsv,
+  spray,
   guava,
   scalaTest
 )
